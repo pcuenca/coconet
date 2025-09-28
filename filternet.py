@@ -1,4 +1,3 @@
-"""Inference helpers for the Filternet model."""
 from __future__ import annotations
 
 from collections import OrderedDict
@@ -10,10 +9,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-try:
-    RESAMPLE_BILINEAR = Image.Resampling.BILINEAR
-except AttributeError:  # Pillow<9.1 fallback
-    RESAMPLE_BILINEAR = Image.BILINEAR
 from fastai.vision.all import Normalize, imagenet_stats, resnet50
 from fastai.vision.learner import create_cnn_model
 from torch import nn
@@ -101,7 +96,7 @@ def _pil_to_tensor(image: Image.Image, size: Optional[int] = None) -> Tensor:
     if image.mode != "RGB":
         image = image.convert("RGB")
     if size is not None:
-        image = image.resize((size, size), RESAMPLE_BILINEAR)
+        image = image.resize((size, size), Image.Resampling.BILINEAR)
     array = np.asarray(image, dtype=np.float32) / 255.0
     tensor = torch.from_numpy(array).permute(2, 0, 1)
     return tensor
@@ -143,8 +138,8 @@ def apply_filters_to_image(
 
 @dataclass
 class FilternetPrediction:
-    image: Image.Image
-    filters: Dict[str, float]
+    image: Image.Image          # With filters applied to input image
+    filters: Dict[str, float]   # Predicted filters
 
 
 class FilternetPredictor:
@@ -190,7 +185,7 @@ class FilternetPredictor:
         self._params = output.detach().to("cpu", torch.float32)
 
     def _preprocess(self, image: Image.Image) -> Tensor:
-        tensor = _pil_to_tensor(image, self.image_size)
+        tensor = _pil_to_tensor(image, self.image_size).to(self.device)
         normalized = _linear_normalize(
             tensor,
             self._norm_mean,

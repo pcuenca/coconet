@@ -1,4 +1,3 @@
-"""Utilities for running CocoGold segmentation inference outside the notebook workflow."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -98,6 +97,7 @@ def desaturate_highlights(
     return image * scaling
 
 
+# These are simplified for 1 channel
 def _binary_erosion(mask: Tensor, kernel_size: int) -> Tensor:
     kernel = torch.ones((1, 1, kernel_size, kernel_size), dtype=torch.float32, device=mask.device)
     padding = kernel_size // 2
@@ -134,13 +134,6 @@ def build_mask(
     return morphological_opening(mask, kernel_size=kernel_size)
 
 
-def highlight_prediction_with_mask(prediction: Tensor, mask: Tensor) -> Tensor:
-    highlighted = prediction.clone()
-    mask_expanded = mask.unsqueeze(0).to(highlighted.device)
-    highlighted = torch.where(mask_expanded > 0.5, torch.tensor(1.0, device=highlighted.device, dtype=highlighted.dtype), highlighted)
-    return highlighted
-
-
 @torch.inference_mode()
 def run_cocogold_inference(
     pipeline: MarigoldPipeline,
@@ -159,30 +152,29 @@ def run_cocogold_inference(
     if image.width != image.height:
         raise ValueError("Expected a square image for CocoGold inference.")
 
-    tensor = _pil_to_tensor(image)
-    tensor = desaturate_highlights(
-        tensor, threshold=desaturation_threshold, desaturation_factor=desaturation_factor
+    pipe_input = _pil_to_tensor(image)
+    pipe_input = desaturate_highlights(
+        pipe_input, threshold=desaturation_threshold, desaturation_factor=desaturation_factor
     )
-    tensor = tensor.unsqueeze(0).to(device=pipeline.device, dtype=pipeline.unet.dtype)
+    pipe_input = pipe_input.unsqueeze(0).to(device=pipeline.device, dtype=pipeline.unet.dtype)
 
     text_embeddings = encode_prompt(pipeline, prompt)
 
+    # pred_mean is grayscale, predicted contains the three predicted channels
     pred_mean, predicted = pipeline.single_infer(
-        tensor,
+        pipe_input,
         text_embeddings,
         num_inference_steps=num_inference_steps,
         generator=generator,
         show_pbar=show_progress,
     )
 
+    predicted = predicted.squeeze().cpu()
     pred_mean = pred_mean.squeeze().cpu()
     mask = build_mask(
         pred_mean, threshold=mask_threshold, kernel_size=mask_kernel_size
     )
 
-    prediction = predicted.squeeze().cpu()
-    highlighted = highlight_prediction_with_mask(prediction, mask)
-
-    predicted_image = _tensor_to_pil_image(highlighted)
+    predicted_image = _tensor_to_pil_image(predicted)
     mask_image = _tensor_to_pil_mask(mask)
     return predicted_image, mask_image
