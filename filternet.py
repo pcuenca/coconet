@@ -9,8 +9,11 @@ import numpy as np
 import torch
 from PIL import Image
 
+from fastai.data.transforms import IntToFloatTensor, ToTensor
 from fastai.vision.all import Normalize, imagenet_stats, resnet50
+from fastai.vision.augment import Flip
 from fastai.vision.learner import create_cnn_model
+from fastai.vision.core import PILImage
 from torch import nn
 
 from magicml.filters.all import (
@@ -24,6 +27,7 @@ from magicml.filters.all import (
     sRGB_to_linear,
 )
 from magicml.model import FilterNet
+from magicml.filters.transforms import sRGBToLinear
 
 PathLike = Union[str, Path]
 DeviceLike = Union[str, torch.device]
@@ -102,12 +106,6 @@ def _pil_to_tensor(image: Image.Image, size: Optional[int] = None) -> Tensor:
     return tensor
 
 
-def _linear_normalize(tensor: Tensor, mean: Tensor, std: Tensor) -> Tensor:
-    linear = sRGB_to_linear(tensor)
-    return (linear - mean) / std
-
-
-
 def apply_filters_to_image(
     image: Image.Image,
     intensities: Sequence[float],
@@ -161,9 +159,15 @@ class FilternetPredictor:
         self.filters_to_apply = _default_filters(max_kelvin, min_kelvin)
         self.filter_names = FILTER_NAMES
 
+        # Replicate full fastai pre-processing pipeline, including the disabled Flip,
+        # to ensure full determinism. With PIL bilinear resampling and our normalization
+        # we got slight differences.
         self._norm = Normalize.from_stats(*imagenet_stats)
-        self._norm_mean = self._norm.mean.squeeze(0).to(torch.float32)
-        self._norm_std = self._norm.std.squeeze(0).to(torch.float32)
+        self._to_tensor = ToTensor()
+        self._int_to_float = IntToFloatTensor()
+        self._linearize = sRGBToLinear()
+        self._resize = Flip(p=0.0, size=[image_size, image_size])
+        self._resize.setup()
 
         self.model = _build_filternet_model(
             arch=arch,
@@ -185,14 +189,14 @@ class FilternetPredictor:
         self._params = output.detach().to("cpu", torch.float32)
 
     def _preprocess(self, image: Image.Image) -> Tensor:
-        tensor = _pil_to_tensor(image, self.image_size).to(self.device)
-        normalized = _linear_normalize(
-            tensor,
-            self._norm_mean,
-            self._norm_std,
-        )
+        fa_image = PILImage.create(np.asarray(image))
+        tensor = self._to_tensor(fa_image).unsqueeze(0)
+        tensor = self._int_to_float(tensor)
+        tensor = self._linearize(tensor)
+        tensor = self._resize(tensor)
+        tensor = self._norm(tensor.to(self.device))
         dtype = next(self.model.parameters()).dtype
-        return normalized.unsqueeze(0).to(self.device, dtype)
+        return tensor.to(self.device, dtype)
 
     def predict(self, image: Image.Image) -> FilternetPrediction:
         if image.width != image.height:
