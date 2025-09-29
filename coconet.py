@@ -76,11 +76,8 @@ def apply_filternet_with_cocogold(
     cocogold_prediction: Optional[Image.Image] = None,
 ) -> CombinedFilternetResult:
     filternet_result = filternet.predict(image)
-
-    prediction_image = cocogold_prediction
-
-    if mask_image is None or prediction_image is None:
-        prediction_image, mask_image = run_cocogold_inference(
+    if mask_image is None or cocogold_prediction is None:
+        cocogold_prediction, mask_image = run_cocogold_inference(
             cocogold_pipeline,
             image,
             prompt,
@@ -107,7 +104,7 @@ def apply_filternet_with_cocogold(
         composited=composited,
         filternet=filternet_result,
         mask=mask_image,
-        cocogold_prediction=prediction_image,
+        cocogold_prediction=cocogold_prediction,
         bbox=None,
     )
 
@@ -130,10 +127,8 @@ def apply_filternet_with_cocogold_bbox(
     mask_image: Optional[Image.Image] = None,
     cocogold_prediction: Optional[Image.Image] = None,
 ) -> CombinedFilternetResult:
-    prediction_image = cocogold_prediction
-
-    if mask_image is None or prediction_image is None:
-        prediction_image, mask_image = run_cocogold_inference(
+    if mask_image is None or cocogold_prediction is None:
+        cocogold_prediction, mask_image = run_cocogold_inference(
             cocogold_pipeline,
             image,
             prompt,
@@ -155,7 +150,7 @@ def apply_filternet_with_cocogold_bbox(
             composited=image.copy(),
             filternet=filternet.predict(image),
             mask=mask_image,
-            cocogold_prediction=prediction_image,
+            cocogold_prediction=cocogold_prediction,
             bbox=None,
         )
 
@@ -180,6 +175,6 @@ def apply_filternet_with_cocogold_bbox(
         composited=composited,
         filternet=crop_prediction,
         mask=mask_image,
-        cocogold_prediction=prediction_image,
+        cocogold_prediction=cocogold_prediction,
         bbox=bbox,
     )

@@ -140,8 +140,8 @@ Upload an image, provide a short prompt, and compare two Filternet blending stra
         blended_bbox = gr.Image(label="BBox Blend", height=300)
 
     with gr.Row():
-        mask_full = gr.Image(label="Mask (Full)", height=250)
-        mask_bbox = gr.Image(label="Mask (BBox with overlay)", height=250)
+        mask_full = gr.Image(label="Mask", height=250)
+        mask_bbox = gr.Image(label="Mask with bbox", height=250)
 
     with gr.Row():
         filters_full = gr.JSON(label="Filternet Parameters (Full)")
