@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from diffusers import UNet2DConditionModel
+from diffusers import DDIMScheduler, UNet2DConditionModel
 from marigold.marigold_pipeline import MarigoldPipeline
 
 Tensor = torch.Tensor
@@ -147,6 +147,7 @@ def run_cocogold_inference(
     mask_kernel_size: int = 3,
     ensemble_runs: int = 1,
     ensemble_reduction: str = "median",
+    scheduler_name: Optional[str] = None,
     generator: Optional[torch.Generator] = None,
     show_progress: bool = False,
 ) -> Tuple[Image.Image, Image.Image]:
@@ -162,6 +163,17 @@ def run_cocogold_inference(
 
     text_embeddings = encode_prompt(pipeline, prompt)
 
+    original_scheduler = None
+    if scheduler_name is not None:
+        scheduler_name = scheduler_name.lower()
+        if scheduler_name == "trailing_ddim":
+            original_scheduler = pipeline.scheduler
+            pipeline.scheduler = DDIMScheduler.from_config(
+                original_scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing"
+            )
+        else:
+            raise ValueError(f"Unsupported scheduler_name: {scheduler_name}")
+
     if ensemble_runs < 1:
         raise ValueError("ensemble_runs must be >= 1")
     if ensemble_reduction not in {"mean", "median"}:
@@ -174,22 +186,26 @@ def run_cocogold_inference(
     if generator is not None:
         base_seed = generator.initial_seed()
 
-    for idx in range(ensemble_runs):
-        current_generator = generator
-        if generator is not None:
-            current_generator = torch.Generator(device=pipeline.device)
-            current_generator.manual_seed(base_seed + idx)
+    try:
+        for idx in range(ensemble_runs):
+            current_generator = generator
+            if generator is not None:
+                current_generator = torch.Generator(device=pipeline.device)
+                current_generator.manual_seed(base_seed + idx)
 
-        pred_mean, predicted = pipeline.single_infer(
-            pipe_input,
-            text_embeddings,
-            num_inference_steps=num_inference_steps,
-            generator=current_generator,
-            show_pbar=show_progress,
-        )
+            pred_mean, predicted = pipeline.single_infer(
+                pipe_input,
+                text_embeddings,
+                num_inference_steps=num_inference_steps,
+                generator=current_generator,
+                show_pbar=show_progress,
+            )
 
-        pred_means.append(pred_mean.squeeze().cpu())
-        predicted_images.append(predicted.squeeze().cpu())
+            pred_means.append(pred_mean.squeeze().cpu())
+            predicted_images.append(predicted.squeeze().cpu())
+    finally:
+        if original_scheduler is not None:
+            pipeline.scheduler = original_scheduler
 
     pred_means_tensor = torch.stack(pred_means, dim=0)
     predicted_tensor = torch.stack(predicted_images, dim=0)

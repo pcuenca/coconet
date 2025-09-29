@@ -72,6 +72,7 @@ def apply_filternet_with_cocogold(
     mask_feather_radius: float = 0.0,
     ensemble_runs: int = 1,
     ensemble_reduction: str = "median",
+    scheduler_name: Optional[str] = None,
     generator=None,
     show_progress: bool = False,
     mask_image: Optional[Image.Image] = None,
@@ -90,6 +91,7 @@ def apply_filternet_with_cocogold(
             mask_kernel_size=mask_kernel_size,
             ensemble_runs=ensemble_runs,
             ensemble_reduction=ensemble_reduction,
+            scheduler_name=scheduler_name,
             generator=generator,
             show_progress=show_progress,
         )
@@ -128,6 +130,7 @@ def apply_filternet_with_cocogold_bbox(
     mask_feather_radius: float = 0.0,
     ensemble_runs: int = 1,
     ensemble_reduction: str = "median",
+    scheduler_name: Optional[str] = None,
     generator=None,
     show_progress: bool = False,
     mask_image: Optional[Image.Image] = None,
@@ -145,6 +148,7 @@ def apply_filternet_with_cocogold_bbox(
             mask_kernel_size=mask_kernel_size,
             ensemble_runs=ensemble_runs,
             ensemble_reduction=ensemble_reduction,
+            scheduler_name=scheduler_name,
             generator=generator,
             show_progress=show_progress,
         )

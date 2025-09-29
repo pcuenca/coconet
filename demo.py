@@ -78,12 +78,16 @@ def _run_pipelines(
     unet_choice: str,
     ensemble_runs: int,
     ensemble_reduction: str,
+    num_steps: int,
+    scheduler_choice: str,
 ):
     if image is None or not prompt.strip():
         raise gr.Error("Please provide an image and a prompt before running the demo.")
 
     processed_image = _prepare_image(image)
     ensemble_runs = int(ensemble_runs)
+    num_steps = int(num_steps)
+    scheduler_name = None if scheduler_choice == "default" else scheduler_choice
 
     filternet = get_filternet_predictor()
     unet_path = COCOGOLD_CHOICES.get(unet_choice, COCOGOLD_CHOICES["iter_8000"])
@@ -97,6 +101,8 @@ def _run_pipelines(
         mask_feather_radius=MASK_FEATHER_RADIUS,
         ensemble_runs=ensemble_runs,
         ensemble_reduction=ensemble_reduction,
+        num_inference_steps=num_steps,
+        scheduler_name=scheduler_name,
     )
 
     bbox_result: CombinedFilternetResult = apply_filternet_with_cocogold_bbox(
@@ -110,6 +116,8 @@ def _run_pipelines(
         cocogold_prediction=full_result.cocogold_prediction,
         ensemble_runs=ensemble_runs,
         ensemble_reduction=ensemble_reduction,
+        num_inference_steps=num_steps,
+        scheduler_name=scheduler_name,
     )
 
     full_mask = full_result.mask
@@ -138,12 +146,13 @@ Upload an image, provide a short prompt, and compare two Filternet blending stra
     with gr.Row():
         image_input = gr.Image(type="pil", label="Input Image", height=350)
         with gr.Column():
-            prompt_input = gr.Textbox(label="Prompt", placeholder="Describe what to segment", lines=2)
-            unet_choice = gr.Dropdown(
-                choices=list(COCOGOLD_CHOICES.keys()),
-                value="iter_8000",
-                label="CocoGold UNet checkpoint",
-            )
+            with gr.Row():
+                prompt_input = gr.Textbox(label="Prompt", placeholder="Describe what to segment", lines=2)
+                unet_choice = gr.Dropdown(
+                    choices=list(COCOGOLD_CHOICES.keys()),
+                    value="iter_8000",
+                    label="UNet checkpoint",
+                )
             with gr.Row():
                 ensemble_runs = gr.Slider(
                     minimum=1,
@@ -156,6 +165,19 @@ Upload an image, provide a short prompt, and compare two Filternet blending stra
                     choices=["median", "mean"],
                     value="median",
                     label="Ensemble reduction",
+                )
+            with gr.Row():
+                num_steps = gr.Slider(
+                    minimum=1,
+                    maximum=50,
+                    step=1,
+                    value=50,
+                    label="Inference steps",
+                )
+                scheduler_choice = gr.Dropdown(
+                    choices=["default", "trailing_ddim"],
+                    value="default",
+                    label="Scheduler",
                 )
             run_button = gr.Button("Run Pipelines", variant="primary")
 
@@ -173,7 +195,7 @@ Upload an image, provide a short prompt, and compare two Filternet blending stra
 
     run_button.click(
         _run_pipelines,
-        inputs=[image_input, prompt_input, unet_choice, ensemble_runs, ensemble_reduction],
+        inputs=[image_input, prompt_input, unet_choice, ensemble_runs, ensemble_reduction, num_steps, scheduler_choice],
         outputs=[blended_full, blended_bbox, mask_full, mask_bbox, filters_full, filters_bbox],
     )
 
