@@ -7,8 +7,8 @@ from diffusers.utils import load_image
 inputs = ("images/clock-original.png", "horse")
 
 # cocogold checkpoint
-cocogold_checkpoint = "iter_018000"
-# cocogold_checkpoint = "iter_008000"
+# cocogold_checkpoint = "iter_018000"
+cocogold_checkpoint = "iter_008000"
 unet_checkpoint = "/home/pedro/code/hf/diffusers/marigold-segmentation/Marigold/output/overlapped/25_06_11-13_00_18-train_cocogold/checkpoint/" + cocogold_checkpoint
 sd_checkpoint = "/home/pedro/code/hf/diffusers/marigold-segmentation/checkpoints/stable-diffusion-2"
 pipe = load_cocogold_pipeline(unet_checkpoint, sd_checkpoint)

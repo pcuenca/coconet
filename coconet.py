@@ -72,21 +72,29 @@ def apply_filternet_with_cocogold(
     mask_feather_radius: float = 0.0,
     generator=None,
     show_progress: bool = False,
+    mask_image: Optional[Image.Image] = None,
+    cocogold_prediction: Optional[Image.Image] = None,
 ) -> CombinedFilternetResult:
     filternet_result = filternet.predict(image)
 
-    predicted_image, mask_image = run_cocogold_inference(
-        cocogold_pipeline,
-        image,
-        prompt,
-        num_inference_steps=num_inference_steps,
-        desaturation_threshold=desaturation_threshold,
-        desaturation_factor=desaturation_factor,
-        mask_threshold=mask_threshold,
-        mask_kernel_size=mask_kernel_size,
-        generator=generator,
-        show_progress=show_progress,
-    )
+    prediction_image = cocogold_prediction
+
+    if mask_image is None or prediction_image is None:
+        prediction_image, mask_image = run_cocogold_inference(
+            cocogold_pipeline,
+            image,
+            prompt,
+            num_inference_steps=num_inference_steps,
+            desaturation_threshold=desaturation_threshold,
+            desaturation_factor=desaturation_factor,
+            mask_threshold=mask_threshold,
+            mask_kernel_size=mask_kernel_size,
+            generator=generator,
+            show_progress=show_progress,
+        )
+
+    if mask_image.size != image.size:
+        raise ValueError("Provided mask must match the input image dimensions.")
 
     composited = _combine_with_mask(
         image,
@@ -99,7 +107,7 @@ def apply_filternet_with_cocogold(
         composited=composited,
         filternet=filternet_result,
         mask=mask_image,
-        cocogold_prediction=predicted_image,
+        cocogold_prediction=prediction_image,
         bbox=None,
     )
 
@@ -119,19 +127,27 @@ def apply_filternet_with_cocogold_bbox(
     mask_feather_radius: float = 0.0,
     generator=None,
     show_progress: bool = False,
+    mask_image: Optional[Image.Image] = None,
+    cocogold_prediction: Optional[Image.Image] = None,
 ) -> CombinedFilternetResult:
-    predicted_image, mask_image = run_cocogold_inference(
-        cocogold_pipeline,
-        image,
-        prompt,
-        num_inference_steps=num_inference_steps,
-        desaturation_threshold=desaturation_threshold,
-        desaturation_factor=desaturation_factor,
-        mask_threshold=mask_threshold,
-        mask_kernel_size=mask_kernel_size,
-        generator=generator,
-        show_progress=show_progress,
-    )
+    prediction_image = cocogold_prediction
+
+    if mask_image is None or prediction_image is None:
+        prediction_image, mask_image = run_cocogold_inference(
+            cocogold_pipeline,
+            image,
+            prompt,
+            num_inference_steps=num_inference_steps,
+            desaturation_threshold=desaturation_threshold,
+            desaturation_factor=desaturation_factor,
+            mask_threshold=mask_threshold,
+            mask_kernel_size=mask_kernel_size,
+            generator=generator,
+            show_progress=show_progress,
+        )
+
+    if mask_image.size != image.size:
+        raise ValueError("Provided mask must match the input image dimensions.")
 
     bbox = _mask_to_bbox(mask_image, padding=bbox_padding)
     if bbox is None:
@@ -139,7 +155,7 @@ def apply_filternet_with_cocogold_bbox(
             composited=image.copy(),
             filternet=filternet.predict(image),
             mask=mask_image,
-            cocogold_prediction=predicted_image,
+            cocogold_prediction=prediction_image,
             bbox=None,
         )
 
@@ -164,6 +180,6 @@ def apply_filternet_with_cocogold_bbox(
         composited=composited,
         filternet=crop_prediction,
         mask=mask_image,
-        cocogold_prediction=predicted_image,
+        cocogold_prediction=prediction_image,
         bbox=bbox,
     )
