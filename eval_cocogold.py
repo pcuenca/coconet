@@ -160,37 +160,41 @@ def evaluate_cocogold(
             pass
 
     generator_seed = seed if seed is not None else None
-    sample_index = 0
+    batch_index = 0
 
     for batch in iterator:
-        for sample in batch:
-            image: Image.Image = sample["image"]
-            target_mask: Image.Image = sample["mask"]
-            category = sample["class"]
+        images = [sample["image"] for sample in batch]
+        target_masks = [sample["mask"] for sample in batch]
+        categories_in_batch = [sample["class"] for sample in batch]
+        prompts = [prompt_template.format(category=cat) for cat in categories_in_batch]
 
-            prompt = prompt_template.format(category=category)
+        current_generator = None
+        if generator_seed is not None:
+            current_generator = torch.Generator(device=pipeline.device)
+            current_generator.manual_seed(generator_seed + batch_index)
 
-            current_generator = None
-            if generator_seed is not None:
-                current_generator = torch.Generator(device=pipeline.device)
-                current_generator.manual_seed(generator_seed + sample_index)
+        _, predicted_masks = run_cocogold_inference(
+            pipeline,
+            images,
+            prompts,
+            num_inference_steps=num_inference_steps,
+            desaturation_threshold=desaturation_threshold,
+            desaturation_factor=desaturation_factor,
+            mask_threshold=mask_threshold,
+            mask_kernel_size=mask_kernel_size,
+            ensemble_runs=ensemble_runs,
+            ensemble_reduction=ensemble_reduction,
+            scheduler_name=scheduler_name,
+            generator=current_generator,
+            show_progress=False,
+        )
 
-            predicted_image, predicted_mask_image = run_cocogold_inference(
-                pipeline,
-                image,
-                prompt,
-                num_inference_steps=num_inference_steps,
-                desaturation_threshold=desaturation_threshold,
-                desaturation_factor=desaturation_factor,
-                mask_threshold=mask_threshold,
-                mask_kernel_size=mask_kernel_size,
-                ensemble_runs=ensemble_runs,
-                ensemble_reduction=ensemble_reduction,
-                scheduler_name=scheduler_name,
-                generator=current_generator,
-                show_progress=False,
-            )
+        if not isinstance(predicted_masks, list):
+            predicted_masks = [predicted_masks]
 
+        for category, target_mask, predicted_mask_image in zip(
+            categories_in_batch, target_masks, predicted_masks
+        ):
             pred_mask = _to_bool_mask(predicted_mask_image)
             target = _to_bool_mask(target_mask)
 
@@ -204,7 +208,7 @@ def evaluate_cocogold(
                     _update_confusion(confusion_by_bucket[bucket_name], pred_mask, target)
                     counts_by_bucket[bucket_name] += 1
 
-            sample_index += 1
+        batch_index += 1
 
     overall_metrics = _metrics_from_confusion(confusion_overall)
     overall_metrics["count"] = total_samples

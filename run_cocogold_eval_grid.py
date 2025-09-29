@@ -110,6 +110,10 @@ def run_grid(
             )
 
             for ensemble_runs in ensemble_runs_list:
+                print(
+                    f"[Eval] model={model_name} ensemble={ensemble_runs} "
+                    f"scheduler={scheduler or 'default'} steps={num_inference_steps}"
+                )
                 results = evaluate_cocogold(
                     dataset_root,
                     split="val",
@@ -179,6 +183,10 @@ def run_grid(
             )
 
             for steps in extra_trailing_steps:
+                print(
+                    f"[Eval] model={model_name}-trailing ensemble={extra_trailing_ensemble_runs} "
+                    f"scheduler=trailing_ddim steps={steps}"
+                )
                 results = evaluate_cocogold(
                     dataset_root,
                     split="val",

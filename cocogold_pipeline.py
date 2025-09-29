@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -134,11 +134,19 @@ def build_mask(
     return morphological_opening(mask, kernel_size=kernel_size)
 
 
+def _ensure_sequence(obj, length: Optional[int] = None):
+    if isinstance(obj, (list, tuple)):
+        return list(obj)
+    if length is not None and length != 1:
+        raise ValueError("Expected a sequence matching the batch size.")
+    return [obj]
+
+
 @torch.inference_mode()
 def run_cocogold_inference(
     pipeline: MarigoldPipeline,
-    image: Image.Image,
-    prompt: str,
+    image: Union[Image.Image, Sequence[Image.Image]],
+    prompt: Union[str, Sequence[str]],
     *,
     num_inference_steps: int = 50,
     desaturation_threshold: float = 0.6,
@@ -151,17 +159,32 @@ def run_cocogold_inference(
     generator: Optional[torch.Generator] = None,
     show_progress: bool = False,
 ) -> Tuple[Image.Image, Image.Image]:
-    """Run inference on a single square image and return a highlighted prediction and mask."""
-    if image.width != image.height:
-        raise ValueError("Expected a square image for CocoGold inference.")
+    images = _ensure_sequence(image)
+    prompts = _ensure_sequence(prompt, length=len(images))
 
-    pipe_input = _pil_to_tensor(image)
-    pipe_input = desaturate_highlights(
-        pipe_input, threshold=desaturation_threshold, desaturation_factor=desaturation_factor
-    )
-    pipe_input = pipe_input.unsqueeze(0).to(device=pipeline.device, dtype=pipeline.unet.dtype)
+    for img in images:
+        if img.width != img.height:
+            raise ValueError("Expected square images for CocoGold inference.")
 
-    text_embeddings = encode_prompt(pipeline, prompt)
+    processed = []
+    for img in images:
+        tensor = _pil_to_tensor(img)
+        tensor = desaturate_highlights(
+            tensor, threshold=desaturation_threshold, desaturation_factor=desaturation_factor
+        )
+        processed.append(tensor)
+
+    pipe_input = torch.stack(processed, dim=0).to(device=pipeline.device, dtype=pipeline.unet.dtype)
+
+    tokenized = pipeline.tokenizer(
+        prompts,
+        padding="max_length",
+        max_length=pipeline.tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    ).to(pipeline.device)
+    text_embeddings = pipeline.text_encoder(tokenized.input_ids)[0]
+    text_embeddings = text_embeddings.to(dtype=pipeline.unet.dtype, device=pipeline.device)
 
     if ensemble_runs < 1:
         raise ValueError("ensemble_runs must be >= 1")
@@ -201,18 +224,18 @@ def run_cocogold_inference(
                 show_pbar=show_progress,
             )
 
-            pred_means.append(pred_mean.squeeze().cpu())
-            predicted_images.append(predicted.squeeze().cpu())
+            pred_means.append(pred_mean.cpu())
+            predicted_images.append(predicted.cpu())
     finally:
         if original_scheduler is not None:
             pipeline.scheduler = original_scheduler
 
-    pred_means_tensor = torch.stack(pred_means, dim=0)
-    predicted_tensor = torch.stack(predicted_images, dim=0)
+    pred_means_tensor = torch.stack(pred_means, dim=0)  # [E, B, 1, H, W]
+    predicted_tensor = torch.stack(predicted_images, dim=0)  # [E, B, C, H, W]
 
     if ensemble_runs == 1:
-        aggregated_mean = pred_means_tensor.squeeze(0)
-        aggregated_prediction = predicted_tensor.squeeze(0)
+        aggregated_mean = pred_means_tensor[0]
+        aggregated_prediction = predicted_tensor[0]
     else:
         if ensemble_reduction == "mean":
             aggregated_mean = pred_means_tensor.mean(dim=0)
@@ -221,10 +244,19 @@ def run_cocogold_inference(
             aggregated_mean = pred_means_tensor.median(dim=0).values
             aggregated_prediction = predicted_tensor.median(dim=0).values
 
-    mask = build_mask(
-        aggregated_mean, threshold=mask_threshold, kernel_size=mask_kernel_size
-    )
+    aggregated_mean = aggregated_mean.squeeze(1)  # [B, H, W]
 
-    predicted_image = _tensor_to_pil_image(aggregated_prediction)
-    mask_image = _tensor_to_pil_mask(mask)
-    return predicted_image, mask_image
+    batch_size = aggregated_prediction.shape[0]
+    predicted_images_pil = []
+    mask_images_pil = []
+
+    for idx in range(batch_size):
+        predicted_images_pil.append(_tensor_to_pil_image(aggregated_prediction[idx]))
+        mask = build_mask(
+            aggregated_mean[idx], threshold=mask_threshold, kernel_size=mask_kernel_size
+        )
+        mask_images_pil.append(_tensor_to_pil_mask(mask))
+
+    if len(predicted_images_pil) == 1:
+        return predicted_images_pil[0], mask_images_pil[0]
+    return predicted_images_pil, mask_images_pil
