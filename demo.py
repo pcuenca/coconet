@@ -10,7 +10,7 @@ from typing import Dict, Optional, Tuple
 import gradio as gr
 from PIL import Image, ImageDraw
 
-from cocogold import load_cocogold_pipeline
+from cocogold_pipeline import load_cocogold_pipeline
 from coconet import (
     CombinedFilternetResult,
     apply_filternet_with_cocogold,

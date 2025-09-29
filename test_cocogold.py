@@ -1,4 +1,4 @@
-from cocogold import load_cocogold_pipeline, run_cocogold_inference
+from cocogold_pipeline import load_cocogold_pipeline, run_cocogold_inference
 from PIL import Image
 
 # checkpoint = "iter_018000"

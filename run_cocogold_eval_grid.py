@@ -9,7 +9,7 @@ from typing import Iterable, Sequence
 
 import torch
 
-from cocogold import load_cocogold_pipeline
+from cocogold_pipeline import load_cocogold_pipeline
 from eval_cocogold import evaluate_cocogold
 
 

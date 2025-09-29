@@ -8,7 +8,7 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageFilter
 
-from cocogold import run_cocogold_inference
+from cocogold_pipeline import run_cocogold_inference
 from filternet import FilternetPrediction, FilternetPredictor
 
 

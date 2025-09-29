@@ -1,4 +1,4 @@
-from cocogold import load_cocogold_pipeline
+from cocogold_pipeline import load_cocogold_pipeline
 from coconet import apply_filternet_with_cocogold, apply_filternet_with_cocogold_bbox
 from filternet import FilternetPredictor
 

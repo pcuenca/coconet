@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 
 from marigold.marigold_pipeline import MarigoldPipeline
 
-from cocogold import load_cocogold_pipeline, run_cocogold_inference
+from cocogold_pipeline import load_cocogold_pipeline, run_cocogold_inference
 from cocogold.dataset import CocoGoldIterableDataset
 
 

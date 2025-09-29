@@ -163,17 +163,6 @@ def run_cocogold_inference(
 
     text_embeddings = encode_prompt(pipeline, prompt)
 
-    original_scheduler = None
-    if scheduler_name is not None:
-        scheduler_name = scheduler_name.lower()
-        if scheduler_name == "trailing_ddim":
-            original_scheduler = pipeline.scheduler
-            pipeline.scheduler = DDIMScheduler.from_config(
-                original_scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing"
-            )
-        else:
-            raise ValueError(f"Unsupported scheduler_name: {scheduler_name}")
-
     if ensemble_runs < 1:
         raise ValueError("ensemble_runs must be >= 1")
     if ensemble_reduction not in {"mean", "median"}:
@@ -185,6 +174,17 @@ def run_cocogold_inference(
     base_seed = None
     if generator is not None:
         base_seed = generator.initial_seed()
+
+    original_scheduler = None
+    if scheduler_name is not None:
+        scheduler_name = scheduler_name.lower()
+        if scheduler_name == "trailing_ddim":
+            original_scheduler = pipeline.scheduler
+            pipeline.scheduler = DDIMScheduler.from_config(
+                original_scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing"
+            )
+        else:
+            raise ValueError(f"Unsupported scheduler_name: {scheduler_name}")
 
     try:
         for idx in range(ensemble_runs):
