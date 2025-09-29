@@ -1,15 +1,15 @@
 #!/bin/bash
 
-checkpoints_path="/home/pedro/code/hf/diffusers/marigold-segmentation/Marigold/output/overlapped/25_06_11-13_00_18-train_cocogold/checkpoint"
-sd_path="/home/pedro/code/hf/diffusers/marigold-segmentation/checkpoints/stable-diffusion-2"
-dataset_path="/data/datasets/coco/2017"
+CHECKPOINTS_PATH="/home/pedro/code/hf/diffusers/marigold-segmentation/Marigold/output/overlapped/25_06_11-13_00_18-train_cocogold/checkpoint"
+SD_PATH="/home/pedro/code/hf/diffusers/marigold-segmentation/checkpoints/stable-diffusion-2"
+DATASET_PATH="/data/datasets/coco/2017"
 
 python run_cocogold_eval_grid.py \
-    dataset_path \
-    checkpoints_path \
-    sd_path \
+    ${DATASET_PATH} \
+    ${CHECKPOINTS_PATH} \
+    ${SD_PATH} \
     results.csv \
-    --batch-size 32 \
+    --batch-size 64 \
     --models iter_008000 iter_018000 \
     --ensemble-runs 1 2 4 8 \
     --extra-trailing-model iter_018000 \

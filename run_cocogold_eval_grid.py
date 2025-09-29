@@ -124,7 +124,7 @@ def run_grid(
                     device=device,
                     torch_dtype=torch_dtype,
                     seed=seed,
-                    progress=False,
+                    progress=True,
                     num_inference_steps=num_inference_steps,
                     mask_threshold=mask_threshold,
                     mask_kernel_size=mask_kernel_size,
