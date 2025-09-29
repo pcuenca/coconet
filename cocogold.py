@@ -145,6 +145,8 @@ def run_cocogold_inference(
     desaturation_factor: float = 0.7,
     mask_threshold: float = 0.95,
     mask_kernel_size: int = 3,
+    ensemble_runs: int = 1,
+    ensemble_reduction: str = "median",
     generator: Optional[torch.Generator] = None,
     show_progress: bool = False,
 ) -> Tuple[Image.Image, Image.Image]:
@@ -160,21 +162,53 @@ def run_cocogold_inference(
 
     text_embeddings = encode_prompt(pipeline, prompt)
 
-    # pred_mean is grayscale, predicted contains the three predicted channels
-    pred_mean, predicted = pipeline.single_infer(
-        pipe_input,
-        text_embeddings,
-        num_inference_steps=num_inference_steps,
-        generator=generator,
-        show_pbar=show_progress,
-    )
+    if ensemble_runs < 1:
+        raise ValueError("ensemble_runs must be >= 1")
+    if ensemble_reduction not in {"mean", "median"}:
+        raise ValueError("ensemble_reduction must be 'mean' or 'median'")
 
-    predicted = predicted.squeeze().cpu()
-    pred_mean = pred_mean.squeeze().cpu()
+    pred_means = []
+    predicted_images = []
+
+    base_seed = None
+    if generator is not None:
+        base_seed = generator.initial_seed()
+
+    for idx in range(ensemble_runs):
+        current_generator = generator
+        if generator is not None:
+            current_generator = torch.Generator(device=pipeline.device)
+            current_generator.manual_seed(base_seed + idx)
+
+        pred_mean, predicted = pipeline.single_infer(
+            pipe_input,
+            text_embeddings,
+            num_inference_steps=num_inference_steps,
+            generator=current_generator,
+            show_pbar=show_progress,
+        )
+
+        pred_means.append(pred_mean.squeeze().cpu())
+        predicted_images.append(predicted.squeeze().cpu())
+
+    pred_means_tensor = torch.stack(pred_means, dim=0)
+    predicted_tensor = torch.stack(predicted_images, dim=0)
+
+    if ensemble_runs == 1:
+        aggregated_mean = pred_means_tensor.squeeze(0)
+        aggregated_prediction = predicted_tensor.squeeze(0)
+    else:
+        if ensemble_reduction == "mean":
+            aggregated_mean = pred_means_tensor.mean(dim=0)
+            aggregated_prediction = predicted_tensor.mean(dim=0)
+        else:
+            aggregated_mean = pred_means_tensor.median(dim=0).values
+            aggregated_prediction = predicted_tensor.median(dim=0).values
+
     mask = build_mask(
-        pred_mean, threshold=mask_threshold, kernel_size=mask_kernel_size
+        aggregated_mean, threshold=mask_threshold, kernel_size=mask_kernel_size
     )
 
-    predicted_image = _tensor_to_pil_image(predicted)
+    predicted_image = _tensor_to_pil_image(aggregated_prediction)
     mask_image = _tensor_to_pil_mask(mask)
     return predicted_image, mask_image

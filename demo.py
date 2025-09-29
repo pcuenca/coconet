@@ -72,11 +72,18 @@ def _draw_bbox_on_mask(mask: Image.Image, bbox: Optional[Tuple[int, int, int, in
     return color_mask
 
 
-def _run_pipelines(image: Image.Image, prompt: str, unet_choice: str):
+def _run_pipelines(
+    image: Image.Image,
+    prompt: str,
+    unet_choice: str,
+    ensemble_runs: int,
+    ensemble_reduction: str,
+):
     if image is None or not prompt.strip():
         raise gr.Error("Please provide an image and a prompt before running the demo.")
 
     processed_image = _prepare_image(image)
+    ensemble_runs = int(ensemble_runs)
 
     filternet = get_filternet_predictor()
     unet_path = COCOGOLD_CHOICES.get(unet_choice, COCOGOLD_CHOICES["iter_8000"])
@@ -88,6 +95,8 @@ def _run_pipelines(image: Image.Image, prompt: str, unet_choice: str):
         filternet=filternet,
         cocogold_pipeline=pipeline,
         mask_feather_radius=MASK_FEATHER_RADIUS,
+        ensemble_runs=ensemble_runs,
+        ensemble_reduction=ensemble_reduction,
     )
 
     bbox_result: CombinedFilternetResult = apply_filternet_with_cocogold_bbox(
@@ -99,6 +108,8 @@ def _run_pipelines(image: Image.Image, prompt: str, unet_choice: str):
         mask_feather_radius=MASK_FEATHER_RADIUS,
         mask_image=full_result.mask,
         cocogold_prediction=full_result.cocogold_prediction,
+        ensemble_runs=ensemble_runs,
+        ensemble_reduction=ensemble_reduction,
     )
 
     full_mask = full_result.mask
@@ -133,6 +144,19 @@ Upload an image, provide a short prompt, and compare two Filternet blending stra
                 value="iter_8000",
                 label="CocoGold UNet checkpoint",
             )
+            with gr.Row():
+                ensemble_runs = gr.Slider(
+                    minimum=1,
+                    maximum=5,
+                    step=1,
+                    value=1,
+                    label="Ensemble runs",
+                )
+                ensemble_reduction = gr.Radio(
+                    choices=["median", "mean"],
+                    value="median",
+                    label="Ensemble reduction",
+                )
             run_button = gr.Button("Run Pipelines", variant="primary")
 
     with gr.Row():
@@ -149,7 +173,7 @@ Upload an image, provide a short prompt, and compare two Filternet blending stra
 
     run_button.click(
         _run_pipelines,
-        inputs=[image_input, prompt_input, unet_choice],
+        inputs=[image_input, prompt_input, unet_choice, ensemble_runs, ensemble_reduction],
         outputs=[blended_full, blended_bbox, mask_full, mask_bbox, filters_full, filters_bbox],
     )
 
